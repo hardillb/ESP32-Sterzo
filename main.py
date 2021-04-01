@@ -19,7 +19,7 @@ _CHAR3_UUID = (bluetooth.UUID('347b0014-7635-408b-8918-8ff3949ce592'), bluetooth
 _CHAR4_UUID = (bluetooth.UUID('347b0019-7635-408b-8918-8ff3949ce592'), bluetooth.FLAG_READ,)
 
 _RXCHAR_UUID = (bluetooth.UUID('347b0031-7635-408b-8918-8ff3949ce592'), bluetooth.FLAG_WRITE,)
-_TXCHAR_UUID = (bluetooth.UUID('347b0032-7635-408b-8918-8ff3949ce592'), bluetooth.FLAG_INDICATE,)
+_TXCHAR_UUID = (bluetooth.UUID('347b0032-7635-408b-8918-8ff3949ce592'), bluetooth.FLAG_READ|bluetooth.FLAG_INDICATE,)
 
 _STEERING_UUID = (bluetooth.UUID('347b0030-7635-408b-8918-8ff3949ce592'), bluetooth.FLAG_READ|bluetooth.FLAG_NOTIFY,)
 
@@ -30,6 +30,8 @@ class Steerer:
 		self._ble = ble
 		self._ble.active(True)
 		self._ble.irq(self._irq)
+
+		self._enabled = False
 
 		((self._handle_char1, self._handle_char2, self._handle_char3, 
 			self._handle_char4, self._handle_rx, self._handle_tx, self._handle_steer),) = self._ble.gatts_register_services((_SERVICE,))
@@ -49,15 +51,38 @@ class Steerer:
 			self._connections.remove(conn_handle)
 			# Start advertising again to allow a new connection.
 			self._advertise()
+			self._enabled = False
 		elif event == _IRQ_GATTS_INDICATE_DONE:
 			conn_handle, value_handle, status = data
+		elif event == _IRQ_GATTS_WRITE:
+			conn_handle, value_handle = data
+			if conn_handle in self._connections and value_handle == self._handle_rx:
+				value = self._ble.gatts_read(value_handle)
+				print("write {}".format(value))
+				(val,) = struct.unpack(">h", value)
+				print("write {}".format(val))
+				if val == 0x0310:
+					print("first")
+					resp = struct.pack('>hh',0x0310, 0x4a89)
+					self._ble.gatts_write(self._handle_tx,resp)
+					self._ble.gatts_indicate(conn_handle, self._handle_tx)
+				elif val == 0x0311:
+					print("second")
+					resp = struct.pack('>hh',0x0311, 0xffff)
+					self._ble.gatts_write(self._handle_tx,resp)
+					self._ble.gatts_indicate(conn_handle, self._handle_tx)
+					self._enabled = True
+				elif val == 0x0202:
+					print("Received 0x0202")
+				else:
+					print("no match")
 
-	def update(self, angle, notify=False):
+	def update(self, angle):
 		steering_data = struct.pack('<f', angle)
 		self._ble.gatts_write(self._handle_steer, steering_data)
 
 		for conn_handle in self._connections:
-			if notify:
+			if self._enabled:
 				self._ble.gatts_notify(conn_handle, self._handle_steer)
 
 	def _advertise(self, interval_us=500000):
@@ -78,7 +103,7 @@ def start():
 
 		print("loop {}".format(angle))
 
-		ble_module.update(angle, notify=True)
+		ble_module.update(angle)
 		angle = angle + modifier
 
 		if angle == 15:
