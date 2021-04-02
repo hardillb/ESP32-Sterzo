@@ -4,13 +4,10 @@ import bluetooth
 from micropython import const
 from ble_advertising import advertising_payload
 
-
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
 _IRQ_GATTS_WRITE = const(3)
 _IRQ_GATTS_INDICATE_DONE = const(20)
-
-
 
 _SERVICE_UUID = bluetooth.UUID('347b0001-7635-408b-8918-8ff3949ce592')
 _CHAR1_UUID = (bluetooth.UUID('347b0012-7635-408b-8918-8ff3949ce592'), bluetooth.FLAG_WRITE,)
@@ -30,7 +27,6 @@ class Steerer:
 		self._ble = ble
 		self._ble.active(True)
 		self._ble.irq(self._irq)
-
 		self._enabled = False
 
 		((self._handle_char1, self._handle_char2, self._handle_char3, 
@@ -39,7 +35,6 @@ class Steerer:
 		self._connections = set()
 		self._payload = advertising_payload(name=name, services=[_SERVICE_UUID])
 		self._advertise()
-
 
 	def _irq(self, event, data):
 		# Track connections so we can send notifications.
@@ -96,8 +91,6 @@ def start():
 
 	angle = -15
 	modifier = 1
-
-	print("starting\n")
 
 	while True:
 
